@@ -1,0 +1,37 @@
+# Demo-режим: реалистичные задержки ПЛИС.
+# Использование:
+#   docker compose -f docker-compose.yaml -f docker-compose.demo.yaml up -d --build
+#
+# Прошивка: 35–160 с на проект
+# Тест:     60–180 с на вектор (10–20 векторов → 10–60 мин на тестовый проект)
+
+services:
+  fpga-emulator-1:
+    environment:
+      PROGRAM_TIME_MIN_S: "35"
+      PROGRAM_TIME_MAX_S: "160"
+      TEST_TIME_PER_VECTOR_MIN_S: "60"
+      TEST_TIME_PER_VECTOR_MAX_S: "180"
+
+  fpga-emulator-2:
+    environment:
+      PROGRAM_TIME_MIN_S: "35"
+      PROGRAM_TIME_MAX_S: "160"
+      TEST_TIME_PER_VECTOR_MIN_S: "60"
+      TEST_TIME_PER_VECTOR_MAX_S: "180"
+
+  fpga-emulator-3:
+    environment:
+      PROGRAM_TIME_MIN_S: "35"
+      PROGRAM_TIME_MAX_S: "160"
+      TEST_TIME_PER_VECTOR_MIN_S: "60"
+      TEST_TIME_PER_VECTOR_MAX_S: "180"
+
+  fpga-cicd:
+    environment:
+      ETCD_HOST: etcd
+      ETCD_PORT: "2379"
+      MASTER_URL: "http://fpga-master-1:3030"
+      ROOT_TOKEN: "secret-token"
+      CICD_TOKEN: "cicd-secret"
+      GITLAB_WEBHOOK_TOKEN: "gitlab-secret"

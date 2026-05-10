@@ -1,0 +1,36 @@
+# Virtual environments
+.venv
+venv/
+env/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.egg-info/
+dist/
+build/
+*.egg
+
+certgen/certs/
+certgen/keys/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+pipeline.py
+plot_results.py
+run_final_system_tests.py
+run_pipeline.py
+visualize_pipeline.py

@@ -1,0 +1,306 @@
+version: "3.9"
+
+networks:
+  fpga-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  certs:
+
+services:
+
+  # ── Certificate Authority ─────────────────────────────────────────────────────────
+
+  certgen:
+    build:
+      context: certgen
+      dockerfile: Dockerfile
+    container_name: fpga_certgen
+    volumes:
+      - certs:/certs
+    networks:
+      - fpga-net
+    restart: "no"
+
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: fpga_redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: always
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.10
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    container_name: fpga_etcd
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCD_ENABLE_V2: "true"
+      ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+      ETCD_ADVERTISE_CLIENT_URLS: "http://etcd:2379"
+      ETCD_LISTEN_PEER_URLS: "http://0.0.0.0:2380"
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: "http://etcd:2380"
+      ETCD_INITIAL_CLUSTER: "default=http://etcd:2380"
+      ETCD_INITIAL_CLUSTER_STATE: "new"
+      ETCD_INITIAL_CLUSTER_TOKEN: "fpga-etcd-cluster"
+      ETCD_NAME: "default"
+    command: ["/usr/local/bin/etcd"]
+    restart: always
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.11
+
+  # ── FPGA Emulators ─────────────────────────────────────────────────────────
+
+  fpga-emulator-1:
+    build:
+      context: fpga-emulator
+      dockerfile: Dockerfile
+    container_name: fpga_emulator_1
+    ports:
+      - "4001:4000"
+    environment:
+      FPGA_ID: "fpga-emu-1"
+      FPGA_MODEL: "xc7a100t-1csg324c"
+      FPGA_VENDOR: "Xilinx"
+      FAIL_RATE: "0.05"
+      PROGRAM_TIME_MIN_S: "2"
+      PROGRAM_TIME_MAX_S: "5"
+      TEST_TIME_PER_VECTOR_MIN_S: "0.5"
+      TEST_TIME_PER_VECTOR_MAX_S: "1.5"
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.21
+
+  fpga-emulator-2:
+    build:
+      context: fpga-emulator
+      dockerfile: Dockerfile
+    container_name: fpga_emulator_2
+    ports:
+      - "4002:4000"
+    environment:
+      FPGA_ID: "fpga-emu-2"
+      FPGA_MODEL: "nexus_a7"
+      FPGA_VENDOR: "Lattice"
+      FAIL_RATE: "0.05"
+      PROGRAM_TIME_MIN_S: "2"
+      PROGRAM_TIME_MAX_S: "5"
+      TEST_TIME_PER_VECTOR_MIN_S: "0.5"
+      TEST_TIME_PER_VECTOR_MAX_S: "1.5"
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.22
+
+  fpga-emulator-3:
+    build:
+      context: fpga-emulator
+      dockerfile: Dockerfile
+    container_name: fpga_emulator_3
+    ports:
+      - "4003:4000"
+    environment:
+      FPGA_ID: "fpga-emu-3"
+      FPGA_MODEL: "xc7a100t-1csg324c"
+      FPGA_VENDOR: "Xilinx"
+      FAIL_RATE: "0.03"
+      PROGRAM_TIME_MIN_S: "2"
+      PROGRAM_TIME_MAX_S: "5"
+      TEST_TIME_PER_VECTOR_MIN_S: "0.5"
+      TEST_TIME_PER_VECTOR_MAX_S: "1.5"
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.23
+
+  # ── Master nodes ────────────────────────────────────────────────────────────
+
+  fpga-master-1:
+    build:
+      context: fpga-master
+      dockerfile: Dockerfile
+    container_name: fpga_master_1
+    ports:
+      - "3030:3030"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ETCD_HOST: etcd
+      ETCD_PORT: "2379"
+      NODE_NAME: master-1
+      STANDALONE: "true"
+      ROOT_TOKEN: "secret-token"
+    depends_on:
+      - redis
+      - etcd
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.31
+
+  fpga-master-2:
+    build:
+      context: fpga-master
+      dockerfile: Dockerfile
+    container_name: fpga_master_2
+    ports:
+      - "3031:3030"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ETCD_HOST: etcd
+      ETCD_PORT: "2379"
+      NODE_NAME: master-2
+      STANDALONE: "false"
+      ROOT_TOKEN: "secret-token"
+    depends_on:
+      - redis
+      - etcd
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.32
+
+  fpga-master-3:
+    build:
+      context: fpga-master
+      dockerfile: Dockerfile
+    container_name: fpga_master_3
+    ports:
+      - "3032:3030"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ETCD_HOST: etcd
+      ETCD_PORT: "2379"
+      NODE_NAME: master-3
+      STANDALONE: "false"
+      ROOT_TOKEN: "secret-token"
+    depends_on:
+      - redis
+      - etcd
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.33
+
+  # ── Worker nodes ────────────────────────────────────────────────────────────
+
+  fpga-worker-1:
+    build:
+      context: fpga-worker
+      dockerfile: Dockerfile
+    container_name: fpga_worker_1
+    ports:
+      - "4031:3031"
+    environment:
+      WORKER_ID: "worker-1"
+      WORKER_TAGS: "test,dev"
+      MASTER_URL: "http://fpga-master-1:3030"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      API_TOKEN: "secret-token"
+    depends_on:
+      - fpga-master-1
+      - redis
+      - fpga-emulator-1
+      - fpga-emulator-2
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.41
+
+  fpga-worker-2:
+    build:
+      context: fpga-worker
+      dockerfile: Dockerfile
+    container_name: fpga_worker_2
+    ports:
+      - "4032:3031"
+    environment:
+      WORKER_ID: "worker-2"
+      WORKER_TAGS: "prod,staging"
+      MASTER_URL: "http://fpga-master-1:3030"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      API_TOKEN: "secret-token"
+    depends_on:
+      - fpga-master-1
+      - redis
+      - fpga-emulator-3
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.42
+
+  # ── CI/CD Bridge ────────────────────────────────────────────────────────────
+
+  fpga-cicd:
+    build:
+      context: fpga-cicd
+      dockerfile: Dockerfile
+    container_name: fpga_cicd
+    ports:
+      - "3040:3040"
+    environment:
+      ETCD_HOST: etcd
+      ETCD_PORT: "2379"
+      MASTER_URL: "http://fpga-master-1:3030"
+      ROOT_TOKEN: "secret-token"
+      CICD_TOKEN: "cicd-secret"
+      GITLAB_WEBHOOK_TOKEN: "gitlab-secret"
+    depends_on:
+      - etcd
+      - fpga-master-1
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.70
+
+  # ── Dashboard ───────────────────────────────────────────────────────────────
+
+  fpga-dashboard:
+    build:
+      context: fpga-dashboard
+      dockerfile: Dockerfile
+    container_name: fpga_dashboard
+    ports:
+      - "8080:80"
+      - "8443:443"
+    environment:
+      MASTER_URL: "http://fpga-master-1:3030"
+    volumes:
+      - certs:/certs:ro
+    depends_on:
+      - fpga-master-1
+      - certgen
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.60
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: fpga_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+    networks:
+      fpga-net:
+        ipv4_address: 172.20.0.51

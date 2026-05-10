@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: fpga-master-1
+    static_configs:
+      - targets: ["fpga-master-1:3030"]
+    metrics_path: /metrics
+
+  - job_name: fpga-master-2
+    static_configs:
+      - targets: ["fpga-master-2:3030"]
+    metrics_path: /metrics
+
+  - job_name: fpga-master-3
+    static_configs:
+      - targets: ["fpga-master-3:3030"]
+    metrics_path: /metrics
+
+  - job_name: fpga-worker-1
+    static_configs:
+      - targets: ["fpga-worker-1:3031"]
+    metrics_path: /metrics
+
+  - job_name: fpga-worker-2
+    static_configs:
+      - targets: ["fpga-worker-2:3031"]
+    metrics_path: /metrics
+
+  - job_name: fpga-emulator-1
+    static_configs:
+      - targets: ["fpga-emulator-1:4000"]
+    metrics_path: /metrics
+
+  - job_name: fpga-emulator-2
+    static_configs:
+      - targets: ["fpga-emulator-2:4000"]
+    metrics_path: /metrics
+
+  - job_name: fpga-emulator-3
+    static_configs:
+      - targets: ["fpga-emulator-3:4000"]
+    metrics_path: /metrics

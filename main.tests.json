@@ -1,0 +1,46 @@
+TEST_PROJECTS = [
+    {
+        "name": "Network Parser",
+        "worker_tag": "test",
+        "fpga_tag": "fpga-test-001",
+        "bitstream_url": "s3://fpga-artifacts/network-parser/v1.2.3/bitstream.bit",
+        "tests_url": "s3://fpga-testvectors/network-parser/v1.2.3/vectors.json",
+        "test_interface": "usb",
+        "pipeline_id": "vis-net-parser-001",
+    },
+    {
+        "name": "HFT Market Data Decoder",
+        "worker_tag": "test",
+        "fpga_tag": "fpga-test-001",
+        "bitstream_url": "s3://fpga-artifacts/hft-decoder/v2.0.1/bitstream.bit",
+        "tests_url": "s3://fpga-testvectors/hft-decoder/v2.0.1/vectors.json",
+        "test_interface": "usb",
+        "pipeline_id": "vis-hft-decoder-001",
+    },
+    {
+        "name": "TCP Offload Engine",
+        "worker_tag": "test",
+        "fpga_tag": "fpga-test-001",
+        "bitstream_url": "s3://fpga-artifacts/tcp-offload/v3.1.0/bitstream.bit",
+        "tests_url": "s3://fpga-testvectors/tcp-offload/v3.1.0/vectors.json",
+        "test_interface": "usb",
+        "pipeline_id": "vis-tcp-offload-001",
+    },
+]
+PROD_PROJECTS = [
+    {
+        "name": "GPIO Controller",
+        "worker_tag": "stage",
+        "fpga_tag": "dev_gpio_controller",
+        "bitstream_url": "s3://fpga-artifacts/gpio-controller/v1.0.0/bitstream.bit",
+        "tests_url": "s3://fpga-testvectors/gpio-controller/v1.2.3/vectors.json",
+        "pipeline_id": "vis-gpio-dev-001",
+    },
+    {
+        "name": "Encryption Accelerator",
+        "worker_tag": "prod",
+        "fpga_tag": "prod_encryption_accelerator",
+        "bitstream_url": "s3://fpga-artifacts/encrypt-accel/v4.2.0/bitstream.bit",
+        "pipeline_id": "vis-encrypt-prod-001",
+    }
+]

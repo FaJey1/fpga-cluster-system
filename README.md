@@ -27,35 +27,119 @@ sources/
 
 ---
 
-## Быстрый старт
+## Быстрый старт после клонирования
 
 ### Требования
 - Docker + Docker Compose v2
-- Python ≥ 3.10 (для тестов и fpgactl)
+- Python ≥ 3.10
 
-### Запуск кластера
+### Шаг 1 — перейти в директорию репозитория
 
 ```bash
-cd sources/
-docker compose up -d
+cd fpga-cluster-system
 ```
 
-Дождаться запуска (~15 сек):
+### Шаг 2 — создать и активировать виртуальное окружение
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate   # macOS / Linux
+# .venv\Scripts\activate    # Windows
+```
+
+> Важно: использовать venv именно из этой папки, чтобы не конфликтовать с другими проектами.
+
+### Шаг 3 — установить fpgactl
+
+```bash
+pip install -e ./fpgactl
+```
+
+Проверка:
+
+```bash
+fpgactl --help
+```
+
+### Шаг 4 — поднять кластер
+
+```bash
+docker compose up -d --build
+```
+
+Первый запуск собирает Docker-образы (~2–3 мин). При повторном старте — ~15 сек.  
+Сервис `certgen` запустится первым, сгенерирует TLS-сертификаты и завершится — это нормально.
+
+Убедиться, что все контейнеры работают:
 
 ```bash
 docker compose ps
 ```
 
-Все контейнеры должны быть в состоянии `Up`.
+Все сервисы (кроме `fpga_certgen`) должны быть в состоянии `Up`.
 
-### Проверка работоспособности
+### Шаг 5 — настроить контекст fpgactl
 
 ```bash
-# Мастер-узел 1 (без токена — публичный эндпоинт)
-curl http://localhost:3030/health
+fpgactl config use-context http://localhost:3030 --token secret-token
+```
 
-# Кворум кластера
-curl -H "X-API-Token: secret-token" http://localhost:3030/quorum
+Настройки сохраняются в `~/.fpgactl/config.json` и используются всеми последующими командами.
+
+### Шаг 6 — проверить, жив ли кластер
+
+```bash
+# Общее состояние: мастера, воркеры, кворум
+fpgactl health
+
+# Детальный статус кворума (ожидается: ha, fault_tolerance=1)
+fpgactl quorum
+
+# Список мастер-узлов (ожидается: 3 узла)
+fpgactl get masters
+
+# Список рабочих узлов (ожидается: worker-1, worker-2)
+fpgactl get workers
+
+# Список ПЛИС (ожидается: 3 эмулятора на каждом воркере)
+fpgactl get fpgas
+```
+
+Ожидаемый вывод при здоровом кластере:
+
+```
+# fpgactl health
+quorum_state : ha
+masters_count: 3
+quorum_ok    : true
+fault_tolerance: 1
+
+# fpgactl quorum
+state: ha  |  masters: 3  |  fault tolerance: 1
+```
+
+### Шаг 7 — дашборд
+
+Открыть в браузере: **http://localhost:8080**  
+Ввести токен `secret-token` → кластер должен отображаться онлайн.
+
+### Диагностика при проблемах
+
+| Симптом | Команда | Что проверить |
+|---------|---------|---------------|
+| Контейнер не стартует | `docker compose logs <service>` | Ошибки в логах |
+| `Connection refused` у fpgactl | `docker compose ps` | Все ли сервисы `Up`? |
+| `quorum_state: warning` | `fpgactl get masters` | Число мастеров нечётное? |
+| Нет воркеров | `docker compose logs fpga-worker-1` | Подключился ли к мастеру? |
+| `401 Unauthorized` | `fpgactl config show` | Задан ли токен? |
+
+```bash
+# Просмотр логов конкретного сервиса
+docker compose logs -f fpga-master-1
+docker compose logs -f fpga-worker-1
+
+# Перезапустить один сервис без остановки остальных
+docker compose restart fpga-master-1
 ```
 
 ---
@@ -92,7 +176,7 @@ Browser → nginx (port 8080)
          └── fpga-master-3:3030
 ```
 
-Конфигурация в [`fpga-dashboard/nginx.conf.template`](fpga-dashboard/nginx.conf.template):
+Конфигурация в [fpga-dashboard/nginx.conf.template](fpga-dashboard/nginx.conf.template):
 
 ```nginx
 upstream fpga_masters {
@@ -193,10 +277,10 @@ environment:
 При старте каждый мастер автоматически регистрирует root-токен в etcd.  
 Root-токен: роль `admin`, бессрочный, **не может быть отозван**.
 
-Чтобы узнать свой токен:
+Узнать свой токен:
 ```bash
 fpgactl token whoami
-# или
+# или напрямую через curl:
 curl -H "X-API-Token: secret-token" http://localhost:3030/auth/whoami
 ```
 
@@ -217,20 +301,17 @@ curl -H "X-API-Token: secret-token" http://localhost:3030/auth/whoami
 
 **Через fpgactl (рекомендуется):**
 ```bash
-# Сначала настроить контекст:
-python fpgactl/fpgactl.py config use-context http://localhost:3030 --token secret-token
-
 # Токен оператора (CI/CD, бессрочный)
-python fpgactl/fpgactl.py token issue --role operator --description "CI/CD pipeline"
+fpgactl token issue --role operator --description "CI/CD pipeline"
 
 # Токен для дашборда (viewer, TTL 30 дней)
-python fpgactl/fpgactl.py token issue --role viewer --description "Dashboard" --ttl 2592000
+fpgactl token issue --role viewer --description "Dashboard" --ttl 2592000
 
 # Список всех токенов
-python fpgactl/fpgactl.py token list
+fpgactl token list
 
 # Отозвать токен
-python fpgactl/fpgactl.py token revoke <token_id>
+fpgactl token revoke <token_id>
 ```
 
 **Через curl:**
@@ -261,9 +342,10 @@ curl -H "X-API-Token: secret-token" http://localhost:3030/auth/whoami
 ### Установка
 
 ```bash
-cd sources/fpgactl
-pip install click httpx rich
+pip install -e ./fpgactl
 ```
+
+После установки команда `fpgactl` доступна глобально (без `python fpgactl/fpgactl.py`).
 
 ### Первый запуск — настройка контекста
 
@@ -271,8 +353,8 @@ pip install click httpx rich
 > Без этого fpgactl пытается подключиться к `localhost:3030` без токена и получает 401/отказ.
 
 ```bash
-python fpgactl/fpgactl.py config use-context http://localhost:3030 --token secret-token
-python fpgactl/fpgactl.py config show
+fpgactl config use-context http://localhost:3030 --token secret-token
+fpgactl config show
 ```
 
 Настройки сохраняются в `~/.fpgactl/config.json`.
@@ -281,37 +363,37 @@ python fpgactl/fpgactl.py config show
 
 ```bash
 # ── Состояние кластера ─────────────────────────────────────────
-python fpgactl/fpgactl.py health          # здоровье мастера + воркеры
-python fpgactl/fpgactl.py who-master      # текущий лидер кворума
-python fpgactl/fpgactl.py quorum          # детальный статус кворума
+fpgactl health          # здоровье мастера + воркеры
+fpgactl who-master      # текущий лидер кворума
+fpgactl quorum          # детальный статус кворума
 
 # ── Получить ресурсы ───────────────────────────────────────────
-python fpgactl/fpgactl.py get masters     # список мастер-узлов
-python fpgactl/fpgactl.py get workers     # список воркеров
-python fpgactl/fpgactl.py get fpgas       # список ПЛИС
-python fpgactl/fpgactl.py get queue       # очередь задач
-python fpgactl/fpgactl.py get tasks       # история задач
-python fpgactl/fpgactl.py get task <id>   # задача по ID
+fpgactl get masters     # список мастер-узлов
+fpgactl get workers     # список воркеров
+fpgactl get fpgas       # список ПЛИС
+fpgactl get queue       # очередь задач
+fpgactl get tasks       # история задач
+fpgactl get task <id>   # задача по ID
 
 # ── Регистрация ────────────────────────────────────────────────
-python fpgactl/fpgactl.py register worker \
+fpgactl register worker \
   --id worker-3 --tags test,dev --ip 192.168.1.10 --capacity 4
 
-python fpgactl/fpgactl.py register fpga \
+fpgactl register fpga \
   --id fpga-prod-001 --worker worker-3 \
   --model xc7a100t-1csg324c --vendor Xilinx --serial SN-001 --interface usb
 
 # ── Отправка задачи ────────────────────────────────────────────
-python fpgactl/fpgactl.py submit task \
+fpgactl submit task \
   --bitstream s3://fpga-artifacts/network-parser/v1.2.3/bitstream.bit \
   --tag test --mode PROD --priority 1 --pipeline manual-001
 
 # ── Управление токенами (admin) ────────────────────────────────
-python fpgactl/fpgactl.py token whoami
-python fpgactl/fpgactl.py token list
-python fpgactl/fpgactl.py token issue --role operator --description "Deploy bot" --ttl 86400
-python fpgactl/fpgactl.py token issue --role viewer   --description "Read-only"
-python fpgactl/fpgactl.py token revoke <token_id>
+fpgactl token whoami
+fpgactl token list
+fpgactl token issue --role operator --description "Deploy bot" --ttl 86400
+fpgactl token issue --role viewer   --description "Read-only"
+fpgactl token revoke <token_id>
 ```
 
 ### Устранение ошибок fpgactl
@@ -359,14 +441,12 @@ python fpgactl/fpgactl.py token revoke <token_id>
 ### Зависимости
 
 ```bash
-cd sources/
 pip install pytest httpx rich click matplotlib numpy
 ```
 
 ### Запуск всех тестов (кроме failover)
 
 ```bash
-cd sources/
 python -m pytest tests/ -v --ignore=tests/test_quorum_failover.py -k "not failover"
 ```
 

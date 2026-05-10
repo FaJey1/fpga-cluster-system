@@ -16,5 +16,5 @@ dependencies = [
 [project.scripts]
 fpgactl = "fpgactl:cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
+[tool.setuptools]
+py-modules = ["fpgactl"]

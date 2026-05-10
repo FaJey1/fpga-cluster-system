@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FPGA Cluster Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #7d8590;
+      --accent:    #388bfd;
+      --green:     #3fb950;
+      --yellow:    #d29922;
+      --red:       #f85149;
+      --purple:    #bc8cff;
+      --radius:    8px;
+    }
+
+    html[data-theme="light"] {
+      --bg:       #f6f8fa;
+      --surface:  #ffffff;
+      --surface2: #f6f8fa;
+      --border:   #d0d7de;
+      --text:     #24292f;
+      --muted:    #57606a;
+      --accent:   #0969da;
+      --green:    #1a7f37;
+      --yellow:   #9a6700;
+      --red:      #cf222e;
+      --purple:   #8250df;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    .hidden { display: none !important; }
+    code { font-family: 'SFMono-Regular', Consolas, monospace; }
+    b { font-weight: 600; }
+
+    /* ── Login ───────────────────────────────────────────────── */
+    .login-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px;
+      width: 380px;
+      text-align: center;
+    }
+    .login-icon { font-size: 48px; margin-bottom: 12px; }
+    .login-card h1 { font-size: 22px; margin-bottom: 6px; }
+    .login-subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+    .form-group { text-align: left; margin-bottom: 16px; }
+    .form-group label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 10px 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); font-size: 14px;
+      outline: none; transition: border-color .2s;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+    .login-card button.primary {
+      width: 100%; padding: 10px; margin-top: 4px;
+      background: var(--accent); border: none; border-radius: var(--radius);
+      color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .login-card button.primary:hover { opacity: .85; }
+    .error-msg { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 20px; }
+    .login-hint {
+      color: var(--muted); font-size: 12px; margin-top: 16px;
+      border-top: 1px solid var(--border); padding-top: 12px;
+    }
+    .login-hint code { background: var(--bg); padding: 2px 6px; border-radius: 4px; }
+
+    /* ── Navbar ─────────────────────────────────────────────── */
+    .navbar {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon { font-size: 20px; }
+    .brand-title { font-size: 16px; font-weight: 700; }
+    .nav-actions { display: flex; align-items: center; gap: 12px; }
+    .nav-actions .muted { font-size: 12px; }
+
+    /* ── Badges ─────────────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 12px; font-weight: 500;
+    }
+    .badge-online  { background: rgba(63,185,80,.15);  color: var(--green); }
+    .badge-offline { background: rgba(248,81,73,.15);  color: var(--red); }
+    .badge-warning { background: rgba(210,153,34,.15); color: var(--yellow); }
+    .badge-ok      { background: rgba(63,185,80,.15);  color: var(--green); }
+    .badge-warn    { background: rgba(210,153,34,.15); color: var(--yellow); }
+    .badge-err     { background: rgba(248,81,73,.15);  color: var(--red); }
+    .badge-role    { background: rgba(56,139,253,.15); color: var(--accent); }
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    button { cursor: pointer; font-size: 13px; border-radius: var(--radius); border: 1px solid var(--border); }
+    .btn-icon {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 5px 10px; border-radius: var(--radius);
+      transition: background .2s;
+    }
+    .btn-icon:hover { background: var(--border); }
+    .btn-icon.inactive { color: var(--muted); }
+    .btn-secondary {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); padding: 5px 12px;
+    }
+    .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+    .btn-small {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 4px 10px; font-size: 12px;
+    }
+    .btn-small:hover { background: var(--border); }
+    .btn-accent { background: var(--accent); border: none; color: #fff; padding: 6px 14px; }
+    .btn-accent:hover { opacity: .85; }
+    .btn-danger { background: rgba(248,81,73,.15); border: 1px solid rgba(248,81,73,.3); color: var(--red); padding: 3px 8px; }
+    .btn-danger:hover { background: rgba(248,81,73,.25); }
+
+    /* ── Content ────────────────────────────────────────────── */
+    .content {
+      max-width: 1400px; margin: 0 auto;
+      padding: 24px; display: flex; flex-direction: column; gap: 28px;
+    }
+
+    /* ── Cards row (summary) ─────────────────────────────────── */
+    .cards-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-header h3 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .card-body { padding: 16px; }
+
+    .stat-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0; font-size: 13px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .dot.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot.red    { background: var(--red); }
+    .dot.yellow { background: var(--yellow); }
+
+    .quorum-state {
+      font-size: 22px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 10px;
+    }
+    .quorum-state.green { color: var(--green); }
+    .quorum-state.warn  { color: var(--yellow); }
+    .quorum-state.red   { color: var(--red); }
+
+    .warning-msg {
+      background: rgba(210,153,34,.1); border: 1px solid rgba(210,153,34,.3);
+      border-radius: 4px; padding: 6px 10px; margin-top: 8px;
+      font-size: 12px; color: var(--yellow);
+    }
+
+    .green { color: var(--green); }
+    .red   { color: var(--red); }
+    .muted { color: var(--muted); }
+
+    /* ── Section ────────────────────────────────────────────── */
+    section { display: flex; flex-direction: column; gap: 12px; }
+    .section-header { display: flex; align-items: center; gap: 12px; }
+    .section-header h2 { font-size: 16px; font-weight: 600; }
+
+    /* ── Workers grid ───────────────────────────────────────── */
+    .grid-auto {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .worker-card, .fpga-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .worker-card.offline { opacity: .6; border-color: rgba(248,81,73,.3); }
+    .worker-header, .fpga-header {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .worker-name, .fpga-id { font-weight: 600; font-size: 14px; flex: 1; }
+    .worker-ip { font-size: 12px; }
+    .tags-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag {
+      background: rgba(56,139,253,.15); color: var(--accent);
+      border: 1px solid rgba(56,139,253,.3);
+      border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 500;
+    }
+    .load-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .progress-bar {
+      flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s; }
+    .progress-fill.warn { background: var(--yellow); }
+    .worker-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .fpga-list { display: flex; flex-direction: column; gap: 4px; }
+    .fpga-inline { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .workers-inactive-header { grid-column: 1 / -1; padding: 4px 0; border-top: 1px solid var(--border); margin-top: 4px; }
+
+    /* ── FPGA cards ─────────────────────────────────────────── */
+    .fpga-card { border-left: 3px solid var(--border); }
+    .fpga-card.tag-test { border-left-color: var(--accent); }
+    .fpga-card.tag-dev  { border-left-color: var(--green); }
+    .fpga-card.tag-prod { border-left-color: var(--yellow); }
+    .fpga-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+    .fpga-meta div span:first-child { margin-right: 4px; }
+    .fpga-meta div { color: var(--text); }
+
+    /* ── Charts ─────────────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .chart-card h3 { font-size: 13px; color: var(--muted); margin-bottom: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .chart-wrap { position: relative; height: 180px; }
+
+    /* ── Table ──────────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th {
+      text-align: left; padding: 8px 12px;
+      color: var(--muted); font-weight: 500; font-size: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky; top: 0;
+    }
+    .data-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+    .data-table tr:hover td { background: var(--surface2); }
+    .data-table .mono { font-family: monospace; font-size: 12px; color: var(--muted); }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto; max-height: 400px;
+    }
+
+    /* ── Token management ───────────────────────────────────── */
+    .issue-form {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
+    }
+    .issue-form select, .issue-form input {
+      padding: 7px 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); font-size: 13px;
+    }
+    .issue-form input[type=text] { flex: 1; min-width: 160px; }
+    .issue-form input[type=number] { width: 140px; }
+    .token-result {
+      margin-top: 8px; padding: 10px 14px;
+      background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.3);
+      border-radius: var(--radius); font-size: 13px; word-break: break-all;
+      width: 100%;
+    }
+    .token-result.error { background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.3); color: var(--red); }
+    .token-value { font-size: 13px; color: var(--green); letter-spacing: .5px; display: block; margin: 4px 0; }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .cards-row, .charts-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .content { padding: 12px; }
+      .navbar { padding: 0 12px; }
+      .brand-title { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Login ──────────────────────────────────────────────────── -->
+<div id="login" class="login-overlay">
+  <div class="login-card">
+    <h1>FPGA Cluster</h1>
+    <p class="login-subtitle">Мониторинг и управление кластером ПЛИС</p>
+    <div class="form-group">
+      <label>API-токен</label>
+      <input id="token-input" type="password" placeholder="secret-token" autocomplete="off">
+    </div>
+    <button class="primary" onclick="doLogin()">Подключиться</button>
+    <p id="login-error" class="error-msg"></p>
+    <p class="login-hint">
+      Токен по умолчанию: <code>secret-token</code><br>
+      Задан в <code>docker-compose.yaml</code> как <code>ROOT_TOKEN</code>
+    </p>
+  </div>
+</div>
+
+<!-- ── Dashboard ──────────────────────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="brand-title">FPGA Cluster Dashboard</span>
+      <span id="cluster-badge" class="badge badge-offline">● Подключение…</span>
+    </div>
+    <div class="nav-actions">
+      <span id="whoami-badge" class="badge badge-role" style="display:none"></span>
+      <span id="last-update" class="muted"></span>
+      <button id="theme-btn" class="btn-icon" onclick="toggleTheme()" title="Сменить тему">☀</button>
+      <button id="refresh-btn" class="btn-icon" onclick="toggleAutoRefresh()" title="Авто-обновление">↻ <span id="countdown">5s</span></button>
+      <button class="btn-secondary" onclick="doLogout()">Выйти</button>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <!-- Summary cards -->
+    <div class="cards-row">
+      <div class="card">
+        <div class="card-header"><h3>Состояние кластера</h3></div>
+        <div id="health-body" class="card-body"><span class="muted">Загрузка…</span></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Кворум</h3></div>
+        <div id="quorum-body" class="card-body"><span class="muted">Загрузка…</span></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Задачи</h3></div>
+        <div id="tasks-summary-body" class="card-body"><span class="muted">Загрузка…</span></div>
+      </div>
+    </div>
+
+    <!-- Workers -->
+    <section>
+      <div class="section-header">
+        <h2>Воркеры</h2>
+        <span id="workers-count" class="muted"></span>
+      </div>
+      <div id="workers-grid" class="grid-auto"><span class="muted">Загрузка…</span></div>
+    </section>
+
+    <!-- FPGAs -->
+    <section>
+      <div class="section-header">
+        <h2>ПЛИС (FPGA)</h2>
+        <span id="fpgas-count" class="muted"></span>
+      </div>
+      <div id="fpgas-grid" class="grid-auto"><span class="muted">Загрузка…</span></div>
+    </section>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Глубина очереди</h3>
+        <div class="chart-wrap"><canvas id="chart-queue"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Задачи по статусам</h3>
+        <div class="chart-wrap"><canvas id="chart-tasks-status"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Загрузка воркеров</h3>
+        <div class="chart-wrap"><canvas id="chart-workers"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Tasks table -->
+    <section>
+      <div class="section-header">
+        <h2>История задач</h2>
+        <button class="btn-small" onclick="refresh()">Обновить</button>
+        <button id="clear-tasks-btn" class="btn-small btn-danger hidden" onclick="clearTasks()">Очистить историю</button>
+      </div>
+      <div class="table-wrap">
+        <div id="tasks-table-wrap"><span class="muted" style="padding:16px;display:block">Загрузка…</span></div>
+      </div>
+    </section>
+
+    <!-- Token management (admin only) -->
+    <section id="tokens-section" class="hidden">
+      <div class="section-header">
+        <h2>Управление токенами</h2>
+        <button class="btn-small btn-accent" onclick="showIssueForm()">+ Выпустить</button>
+      </div>
+
+      <div id="issue-form" class="issue-form hidden">
+        <select id="new-role">
+          <option value="viewer">viewer — только чтение</option>
+          <option value="operator" selected>operator — отправка задач</option>
+          <option value="admin">admin — полный доступ</option>
+        </select>
+        <input id="new-desc" type="text" placeholder="Описание (CI/CD, dashboard…)">
+        <input id="new-ttl" type="number" placeholder="TTL (сек), пусто = ∞">
+        <button class="btn-accent" onclick="issueToken()">Выпустить</button>
+        <button class="btn-secondary" onclick="hideIssueForm()">Отмена</button>
+        <div id="new-token-result" class="token-result hidden"></div>
+      </div>
+
+      <div class="table-wrap">
+        <div id="tokens-table-wrap"><span class="muted" style="padding:16px;display:block">Загрузка…</span></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

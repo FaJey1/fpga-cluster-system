@@ -1,0 +1,12 @@
+{
+  "name": "fpga-dashboard",
+  "version": "1.0.0",
+  "description": "FPGA Cluster visualization dashboard",
+  "scripts": {
+    "dev": "npx serve -s public -l 8080",
+    "build": "echo 'Static SPA — no build step required'"
+  },
+  "devDependencies": {
+    "serve": "^14.2.3"
+  }
+}
